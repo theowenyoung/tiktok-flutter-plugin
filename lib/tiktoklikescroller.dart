@@ -19,6 +19,7 @@ class TikTokStyleFullPageScroller extends StatefulWidget {
   const TikTokStyleFullPageScroller({
     required this.contentSize,
     required this.builder,
+    this.cardIndex = 0,
     this.swipePositionThreshold = 0.20,
     this.swipeVelocityThreshold = 1000,
     this.animationDuration = const Duration(milliseconds: 300),
@@ -27,6 +28,7 @@ class TikTokStyleFullPageScroller extends StatefulWidget {
 
   /// The number of elements in the list,
   final int contentSize;
+  final int cardIndex;
 
   /// A function that converts a context and an index to a Widget to be rendered
   final IndexedWidgetBuilder builder;
@@ -60,7 +62,6 @@ class _TikTokStyleFullPageScrollerState
   late double _dragStartPosition;
   late AnimationController _animationController;
   late Animation<double> _animation;
-  late int _cardIndex;
   late DragState _dragState;
 
   @override
@@ -71,7 +72,6 @@ class _TikTokStyleFullPageScrollerState
       vsync: this,
       duration: widget.animationDuration,
     );
-    _cardIndex = 0;
     _dragState = DragState.idle;
     super.initState();
   }
@@ -85,19 +85,19 @@ class _TikTokStyleFullPageScrollerState
 
       return Stack(
         children: <Widget>[
-          if (_cardIndex > 0)
+          if (widget.cardIndex > 0)
             Positioned(
               bottom: _containerSize.height - _cardOffset,
               child: SizedBox.fromSize(
                   size: _containerSize,
-                  child: widget.builder(context, _cardIndex - 1)),
+                  child: widget.builder(context, widget.cardIndex - 1)),
             ),
           Positioned(
             top: _cardOffset,
             child: GestureDetector(
               child: SizedBox.fromSize(
                   size: _containerSize,
-                  child: widget.builder(context, _cardIndex)),
+                  child: widget.builder(context, widget.cardIndex)),
               onVerticalDragStart: (DragStartDetails details) {
                 setState(() {
                   _dragState = DragState.dragging;
@@ -123,12 +123,12 @@ class _TikTokStyleFullPageScrollerState
                 // If the length of scroll goes beyond the point of no return
                 // or if a small flick was faster than the velocity threshold
                 if (positiveDragThresholdMet &&
-                    _cardIndex < widget.contentSize - 1) {
+                    widget.cardIndex < widget.contentSize - 1) {
                   // build animation, set state to animate forward
                   // Animate to next card
                   _state = DragState.animatingForward;
                 } else if (negativeDragThresholdMet) {
-                  if (_cardIndex == 0) {
+                  if (widget.cardIndex == 0) {
                     // we are trying to swipe back beyond the first card, if callback exists, call it
                     widget.onScrollEvent?.call(
                         ScrollEventType.NO_SCROLL_START_OF_LIST,
@@ -140,7 +140,7 @@ class _TikTokStyleFullPageScrollerState
                     _state = DragState.animatingBackward;
                   }
                 } else if (positiveDragThresholdMet &&
-                    _cardIndex == widget.contentSize - 1) {
+                    widget.cardIndex == widget.contentSize - 1) {
                   widget.onScrollEvent?.call(
                       ScrollEventType.NO_SCROLL_END_OF_LIST,
                       currentIndex: widget.contentSize - 1);
@@ -158,12 +158,12 @@ class _TikTokStyleFullPageScrollerState
               },
             ),
           ),
-          if (_cardIndex < widget.contentSize - 1)
+          if (widget.cardIndex < widget.contentSize - 1)
             Positioned(
               top: _containerSize.height + _cardOffset,
               child: SizedBox.fromSize(
                 size: _containerSize,
-                child: widget.builder(context, _cardIndex + 1),
+                child: widget.builder(context, widget.cardIndex + 1),
               ),
             ),
         ],
@@ -186,47 +186,45 @@ class _TikTokStyleFullPageScrollerState
     }
     _animation = Tween<double>(begin: _cardOffset, end: _end)
         .animate(_animationController)
-          ..addListener(_animationListener)
-          ..addStatusListener((AnimationStatus _status) {
-            switch (_status) {
-              case AnimationStatus.completed:
-                // change the card index if required,
-                // change the offset back to zero,
-                // change the drag state back to idle
-                int _newCardIndex = _cardIndex;
-                // we finished the scroll and updated the card
-                switch (_dragState) {
-                  case DragState.animatingForward:
-                    _newCardIndex++;
-                    widget.onScrollEvent?.call(ScrollEventType.SCROLLED_FORWARD,
-                        currentIndex: _newCardIndex);
-                    break;
-                  case DragState.animatingBackward:
-                    _newCardIndex--;
-                    widget.onScrollEvent?.call(
-                        ScrollEventType.SCROLLED_BACKWARDS,
-                        currentIndex: _newCardIndex);
-                    break;
-                  case DragState.animatingToCancel:
-                    //no change to card index
-                    break;
-                  default:
-                }
-
-                if (_status != AnimationStatus.dismissed &&
-                    _status != AnimationStatus.forward) {
-                  setState(() {
-                    _cardIndex = _newCardIndex;
-                    _dragState = DragState.idle;
-                    _cardOffset = 0;
-                  });
-                  _animation.removeListener(_animationListener);
-                  _animationController.reset();
-                }
+      ..addListener(_animationListener)
+      ..addStatusListener((AnimationStatus _status) {
+        switch (_status) {
+          case AnimationStatus.completed:
+            // change the card index if required,
+            // change the offset back to zero,
+            // change the drag state back to idle
+            int _newCardIndex = widget.cardIndex;
+            // we finished the scroll and updated the card
+            switch (_dragState) {
+              case DragState.animatingForward:
+                _newCardIndex++;
+                widget.onScrollEvent?.call(ScrollEventType.SCROLLED_FORWARD,
+                    currentIndex: _newCardIndex);
+                break;
+              case DragState.animatingBackward:
+                _newCardIndex--;
+                widget.onScrollEvent?.call(ScrollEventType.SCROLLED_BACKWARDS,
+                    currentIndex: _newCardIndex);
+                break;
+              case DragState.animatingToCancel:
+                //no change to card index
                 break;
               default:
             }
-          });
+
+            if (_status != AnimationStatus.dismissed &&
+                _status != AnimationStatus.forward) {
+              setState(() {
+                _dragState = DragState.idle;
+                _cardOffset = 0;
+              });
+              _animation.removeListener(_animationListener);
+              _animationController.reset();
+            }
+            break;
+          default:
+        }
+      });
     _animationController.forward();
   }
 
